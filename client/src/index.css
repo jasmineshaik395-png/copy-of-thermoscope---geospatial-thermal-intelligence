@@ -219,3 +219,23 @@ kbd { padding: 2px 5px; border: 1px solid #30454e; border-radius: 3px; font: 10p
 #thermoscope-map:focus { outline: 2px solid rgba(64,211,192,.6); outline-offset: -2px; }
 @media (max-width: 1000px) { .utc-clock { display: none; } .date-menu { right: 92px; } }
 @media (max-width: 800px) { .date-menu { position: fixed; top: 58px; right: 14px; } .map-dpad { left: 10px; top: 72px; } }
+
+/* NASA FIRMS live connection */
+.firms-connection { position: relative; }
+.firms-status { height: 34px; display: inline-flex; align-items: center; gap: 7px; padding: 0 9px; color: var(--text-soft); border: 1px solid var(--line); border-radius: 6px; background: rgba(20, 32, 39, .72); font: 10px var(--font-mono); transition: border .16s, background .16s; }
+.firms-status:hover { border-color: #45626b; background: #1a2c33; }
+.firms-live { color: var(--cyan); border-color: rgba(64,211,192,.42); background: rgba(64,211,192,.09); }
+.firms-loading { color: var(--amber); border-color: rgba(242,162,58,.42); }
+.firms-error { color: var(--coral); border-color: rgba(239,120,108,.42); }
+.firms-popover { position: absolute; z-index: 60; top: 42px; right: 0; width: 330px; padding: 14px; border: 1px solid #3a5059; border-radius: 6px; background: #101c22; box-shadow: 0 18px 50px rgba(0,0,0,.48); animation: popIn .18s var(--ease-out); }
+.firms-popover strong { display: block; color: #b9d0d0; font: 9px var(--font-mono); letter-spacing: .12em; }
+.firms-popover p { margin: 8px 0 12px; color: #799098; font-size: 10px; line-height: 1.45; }
+.firms-popover label { display: flex; flex-direction: column; gap: 5px; color: #70848d; font: 9px var(--font-mono); letter-spacing: .1em; }
+.firms-popover input { height: 33px; padding: 0 9px; border: 1px solid #2a4149; border-radius: 4px; outline: 0; background: #0d171c; color: var(--text); font: 11px var(--font-mono); }
+.firms-popover input:focus { border-color: var(--cyan); }
+.firms-popover-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
+.firms-popover-actions a { color: var(--cyan); font-size: 10px; text-decoration: none; }
+.firms-popover-actions a:hover { text-decoration: underline; }
+.firms-popover small { display: block; margin-top: 11px; color: #657981; font-size: 9px; line-height: 1.45; }
+@keyframes popIn { from { opacity: 0; transform: translateY(-5px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.live-badge { color: var(--cyan); border-color: rgba(64,211,192,.32); background: rgba(64,211,192,.1); }

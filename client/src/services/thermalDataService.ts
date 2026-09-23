@@ -6,7 +6,7 @@ export type ThermalEvent = {
   id: string; eventId: string; title: string; location: string; region: string; className: EventClass; status: EventStatus; verification: VerificationStatus;
   latitude: number; longitude: number; frp: number; brightnessTemperature: number; confidence: "High" | "Medium" | "Low";
   baseline: number; delta: number; persistence: number; observations: number; timestamp: string; satellite: string; sensor: "VIIRS" | "MODIS";
-  facility: string; facilityId?: string; facilityType: string; distance: string; coords: string; accent: string; demoData: true; dataSource: "DEMO"; source: "DEMO";
+  facility: string; facilityId?: string; facilityType: string; distance: string; coords: string; accent: string; demoData: boolean; dataSource: "DEMO" | "NASA FIRMS"; source: "DEMO" | "NASA FIRMS";
 };
 
 export type Facility = { id: string; name: string; type: string; region: string; latitude: number; longitude: number; activeEvents: number; baseline: string; anomaly: "ABNORMAL" | "NORMAL" | "WATCH"; trend: string; demoData: true };

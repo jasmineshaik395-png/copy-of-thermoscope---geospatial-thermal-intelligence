@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster";
 import { events, facilities, thermalDataService, type ThermalEvent, type Facility } from "../services/thermalDataService";
 import { satelliteImageryService } from "../services/satelliteImageryService";
+import { firmsService } from "../services/firmsService";
 import {
   Activity,
   AlertTriangle,
@@ -123,6 +124,17 @@ function Sparkline({ color = "#40d3c0", points = "0,20 18,17 36,22 54,10 72,14 9
   );
 }
 
+function FirmsConnection({ status, onConnect }: { status: "demo" | "live" | "loading" | "error"; onConnect: (key: string) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [key, setKey] = useState(() => firmsService.getMapKey());
+  const labels = { demo: "Demo fallback", live: "NASA FIRMS live", loading: "Connecting…", error: "FIRMS error" };
+  const connect = async () => { await onConnect(key); setOpen(false); };
+  return <div className="firms-connection">
+    <button className={`firms-status firms-${status}`} onClick={() => setOpen((value) => !value)} aria-expanded={open}><span className="pulse-dot" /> {labels[status]} <ChevronDown size={13} /></button>
+    {open && <div className="firms-popover"><strong>NASA FIRMS CONNECTION</strong><p>Live VIIRS-NPP detections for India. A free MAP_KEY is required.</p><label>MAP_KEY<input value={key} onChange={(event) => setKey(event.target.value)} placeholder="Paste your FIRMS MAP_KEY" type="password" autoComplete="off" /></label><div className="firms-popover-actions"><a href="https://firms.modaps.eosdis.nasa.gov/api/map_key/" target="_blank" rel="noreferrer">Get a free key ↗</a><button className="primary-button mini" onClick={() => void connect()} disabled={status === "loading"}>{status === "loading" ? "Connecting…" : "Connect & refresh"}</button></div><small>Key is stored only in this browser. For production, proxy FIRMS requests through a server so the key is not exposed to users.</small></div>}
+  </div>;
+}
+
 function KpiCard({ label, value, delta, icon: Icon, tone, points, onClick }: { label: string; value: string; delta: string; icon: React.ElementType; tone: string; points?: string; onClick?: () => void }) {
   return (
     <button className="kpi-card" onClick={onClick} aria-label={`${label}: ${value}`}>
@@ -139,7 +151,7 @@ function KpiCard({ label, value, delta, icon: Icon, tone, points, onClick }: { l
   );
 }
 
-function TopBar({ onMenu, activeView, onSearch, onOpenInvestigation, onOpenFacility, onRangeChange }: { onMenu: () => void; activeView: string; onSearch: (value: string) => void; onOpenInvestigation: (event: ThermalEvent) => void; onOpenFacility: (facility: Facility) => void; onRangeChange: (range: string) => void }) {
+function TopBar({ onMenu, activeView, onSearch, onOpenInvestigation, onOpenFacility, onRangeChange, live }: { onMenu: () => void; activeView: string; onSearch: (value: string) => void; onOpenInvestigation: (event: ThermalEvent) => void; onOpenFacility: (facility: Facility) => void; onRangeChange: (range: string) => void; live: boolean }) {
   const [query, setQuery] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -163,7 +175,7 @@ function TopBar({ onMenu, activeView, onSearch, onOpenInvestigation, onOpenFacil
       <div className="topbar-actions">
         <label className="search-box"><Search size={15} /><input value={query} onFocus={() => setPaletteOpen(true)} onChange={(event) => { setQuery(event.target.value); onSearch(event.target.value); setPaletteOpen(true); }} placeholder="Search events, facilities..." aria-label="Global search" /><kbd>⌘ K</kbd></label>
         <button className="date-control" onClick={() => setDateOpen((open) => !open)} aria-expanded={dateOpen}><CalendarGlyph /><span>{rangeLabel}</span><ChevronDown size={14} /></button>
-        <div className="utc-clock" title="Local application clock">{utcNow.toISOString().slice(0, 10) + " · " + utcNow.toISOString().slice(11, 19)} UTC</div><div className="top-divider" /><button className="source-status" title="Interactive prototype with simulated event data"><span className="pulse-dot" /> <span>Demo sources active</span></button>
+        <div className="utc-clock" title="Local application clock">{utcNow.toISOString().slice(0, 10) + " · " + utcNow.toISOString().slice(11, 19)} UTC</div><div className="top-divider" /><button className="source-status" title={live ? "NASA FIRMS VIIRS-NPP detections are active" : "Interactive prototype with simulated event data"}><span className="pulse-dot" /> <span>{live ? "NASA FIRMS live" : "Demo sources active"}</span></button>
         <div className="profile-wrap" ref={profileRef}><button className="avatar" onClick={() => setProfileOpen((open) => !open)} aria-label="Open analyst profile" aria-expanded={profileOpen}><UserRound size={16} /></button>{profileOpen && <div className="profile-menu"><strong>ANALYST</strong><span className="profile-online"><i /> Online</span><button>Profile</button><button>Settings</button><button>Sign out</button></div>}</div>
       </div>
       {dateOpen && <div className="date-menu"><strong>DATE RANGE</strong>{["Today", "Yesterday", "Last 24 hours", "Last 7 days", "Last 30 days", "Custom range"].map((range) => <button key={range} className={selectedRange === range ? "active" : ""} onClick={() => chooseRange(range)}>{range}<ChevronRight size={13} /></button>)}</div>}
@@ -186,7 +198,7 @@ const navItems = [
   { label: "Alerts", icon: Bell, count: "03", alert: true },
 ];
 
-function Sidebar({ activeView, setActiveView, open, onClose }: { activeView: string; setActiveView: (value: string) => void; open: boolean; onClose: () => void }) {
+function Sidebar({ activeView, setActiveView, open, onClose, live, eventCount }: { activeView: string; setActiveView: (value: string) => void; open: boolean; onClose: () => void; live: boolean; eventCount: number }) {
   return (
     <>
       {open && <button className="sidebar-scrim" onClick={onClose} aria-label="Close navigation" />}
@@ -195,19 +207,19 @@ function Sidebar({ activeView, setActiveView, open, onClose }: { activeView: str
           <LogoMark />
           <div><strong>THERMOSCOPE</strong><span>THERMAL INTELLIGENCE FOR A SAFER WORLD</span></div>
         </div>
-        <div className="online-strip"><span className="pulse-dot" /> SYSTEM ONLINE <span className="demo-badge">DEMO</span></div>
+        <div className="online-strip"><span className="pulse-dot" /> SYSTEM ONLINE <span className={live ? "demo-badge live-badge" : "demo-badge"}>{live ? "LIVE" : "DEMO"}</span></div>
         <nav className="primary-nav" aria-label="Primary navigation">
           <span className="nav-label">WORKSPACE</span>
           {navItems.map((item) => {
             const Icon = item.icon;
-            return <button key={item.label} className={`nav-item ${activeView === item.label ? "active" : ""}`} onClick={() => { setActiveView(item.label); onClose(); }}><Icon size={17} strokeWidth={1.7} /><span>{item.label}</span>{item.count && <em className={item.alert ? "nav-count alert" : "nav-count"}>{item.count}</em>}</button>;
+            return <button key={item.label} className={`nav-item ${activeView === item.label ? "active" : ""}`} onClick={() => { setActiveView(item.label); onClose(); }}><Icon size={17} strokeWidth={1.7} /><span>{item.label}</span>{item.count && <em className={item.alert ? "nav-count alert" : "nav-count"}>{item.label === "Thermal Events" ? eventCount : item.count}</em>}</button>;
           })}
         </nav>
         <div className="sidebar-bottom">
           <div className="scope-card"><div className="scope-heading"><span className="scope-ring"><Target size={13} /></span><span>CONTEXT SCOPE</span><MoreHorizontal size={15} /></div><strong>5 km radius</strong><p>Context only · not proof of causation</p><div className="scope-meter"><span /></div></div>
           <button className="nav-item compact"><Database size={16} /><span>Data sources</span><span className="source-count">5/5</span></button>
           <button className="nav-item compact"><SlidersHorizontal size={16} /><span>System settings</span></button>
-          <div className="analyst-card"><div className="avatar small"><UserRound size={15} /></div><div><strong>ANALYST</strong><span>Online · demo mode</span></div><ChevronDown size={14} /></div>
+          <div className="analyst-card"><div className="avatar small"><UserRound size={15} /></div><div><strong>ANALYST</strong><span>Online · {live ? "live mode" : "demo mode"}</span></div><ChevronDown size={14} /></div>
         </div>
       </aside>
     </>
@@ -481,7 +493,7 @@ function MapView({ selected, onSelect, onOpenInvestigation, onOpenFacility, onRe
     {searchError && <div className="map-inline-message error"><Info size={13} /> {searchError}</div>}{locationError && <div className="map-inline-message warning"><Info size={13} /> {locationError}</div>}
     <div className="map-canvas leaflet-canvas" aria-label="Interactive thermal event map with OpenStreetMap Streets and NASA GIBS Satellite Imagery"><div className="map-dpad" aria-label="Map navigation"><button onClick={() => panMap("up")} aria-label="Pan north">↑</button><div><button onClick={() => panMap("left")} aria-label="Pan west">←</button><button className="dpad-center" aria-label="Map focus" onClick={() => mapContainerRef.current?.focus()}>●</button><button onClick={() => panMap("right")} aria-label="Pan east">→</button></div><button onClick={() => panMap("down")} aria-label="Pan south">↓</button><button className="dpad-home" onClick={goHome} aria-label="Reset India View" title="Reset India View">⌂</button></div><div id="thermoscope-map" ref={mapContainerRef} tabIndex={0} /></div>
     <div className="map-legend leaflet-legend"><strong>THERMAL ASSESSMENT</strong><span><i className="legend-dot industrial" />Industrial Fire Candidate</span><span><i className="legend-dot persistent" />Persistent Thermal Source</span><span><i className="legend-dot wildfire" />Wildfire Candidate</span><span><i className="legend-dot normal" />Normal Industrial Heat</span><span><i className="legend-dot agricultural" />Agricultural Burning</span></div>
-    <div className="map-status"><span className="pulse-dot" /> {viewportCount === events.length ? `${events.length} events available` : `${viewportCount} events in viewport · ${events.length} total`} <span className="status-sep" /> <span className="status-cyan">DEMO DATA</span></div>
+    <div className="map-status"><span className="pulse-dot" /> {viewportCount === events.length ? `${events.length} events available` : `${viewportCount} events in viewport · ${events.length} total`} <span className="status-sep" /> <span className={events[0]?.dataSource === "NASA FIRMS" ? "status-cyan" : "status-demo"}>{events[0]?.dataSource === "NASA FIRMS" ? "NASA FIRMS LIVE" : "DEMO DATA"}</span></div>
     <div className="map-footer"><span><Info size={13} /> <b>5 km Context Radius</b> · Context only · not proof of causation.</span><button onClick={() => setLayersOpen(true)}>Manage layers <ChevronRight size={14} /></button></div>
   </section>;
 }
@@ -521,16 +533,16 @@ function InvestigationDrawer({ event, onClose, onVerify, onOpenInvestigation, on
   </aside>;
 }
 
-function Dashboard({ onSelect, onOpenInvestigation, onOpenFacility, onResetSelection, selected, search, onRunAnalysis, onExport, onRefresh, analysisState, lastRefreshed }: { onSelect: (event: ThermalEvent) => void; onOpenInvestigation: (event: ThermalEvent) => void; onOpenFacility: (facility: Facility) => void; onResetSelection: () => void; selected: ThermalEvent | null; search: string; onRunAnalysis: () => void; onExport: () => void; onRefresh: () => void; analysisState: string; lastRefreshed: string }) {
+function Dashboard({ onSelect, onOpenInvestigation, onOpenFacility, onResetSelection, selected, search, onRunAnalysis, onExport, onRefresh, analysisState, lastRefreshed, firmsStatus, onConnectFirms }: { onSelect: (event: ThermalEvent) => void; onOpenInvestigation: (event: ThermalEvent) => void; onOpenFacility: (facility: Facility) => void; onResetSelection: () => void; selected: ThermalEvent | null; search: string; onRunAnalysis: () => void; onExport: () => void; onRefresh: () => void; analysisState: string; lastRefreshed: string; firmsStatus: "demo" | "live" | "loading" | "error"; onConnectFirms: (key: string) => Promise<void> }) {
   const filteredEvents = events.filter((event) => `${event.title} ${event.location} ${event.id}`.toLowerCase().includes(search.toLowerCase()));
   const highCount = events.filter((event) => event.status === "High").length;
   const pendingCount = events.filter((event) => event.verification === "Pending").length;
   const verifiedCount = events.filter((event) => event.verification === "Verified").length;
   return <>
-    <div className="page-intro"><div><span className="eyebrow"><Activity size={13} /> LIVE THERMAL INTELLIGENCE</span><h1>Command Center</h1><p>Interactive command center · dynamic prototype workflow.</p></div><div className="intro-actions"><StatusPill tone="demo"><CircleDot size={11} /> DEMO DATA</StatusPill><button className="secondary-button" onClick={onExport}><Download size={14} /> Export view</button><button className="secondary-button" onClick={onRefresh}><RefreshCw size={14} /> Refresh</button><button className="primary-button" onClick={onRunAnalysis} disabled={analysisState === "running"}><Zap size={14} /> {analysisState === "running" ? "Running..." : "Run analysis"}</button></div></div><div className="analysis-status" aria-live="polite">{analysisState === "running" ? "Running thermal intelligence analysis..." : analysisState === "complete" ? `Analysis complete · ${events.length} events analyzed` : `Last refreshed: ${lastRefreshed}`}</div>
+    <div className="page-intro"><div><span className="eyebrow"><Activity size={13} /> LIVE THERMAL INTELLIGENCE</span><h1>Command Center</h1><p>Interactive command center · dynamic prototype workflow.</p></div><div className="intro-actions"><FirmsConnection status={firmsStatus} onConnect={onConnectFirms} /><button className="secondary-button" onClick={onExport}><Download size={14} /> Export view</button><button className="secondary-button" onClick={onRefresh}><RefreshCw size={14} /> Refresh</button><button className="primary-button" onClick={onRunAnalysis} disabled={analysisState === "running"}><Zap size={14} /> {analysisState === "running" ? "Running..." : "Run analysis"}</button></div></div><div className="analysis-status" aria-live="polite">{analysisState === "running" ? "Running thermal intelligence analysis..." : analysisState === "complete" ? `Analysis complete · ${events.length} events analyzed` : firmsStatus === "live" ? `NASA FIRMS live feed · ${events.length} detections · refreshed ${lastRefreshed}` : `Demo fallback active · connect NASA FIRMS to replace simulated events · ${lastRefreshed}`}</div>
     <div className="kpi-grid"><KpiCard label="Active thermal events" value={String(events.length)} delta="+8.4%" tone="cyan" icon={Flame} points="0,18 18,20 36,12 54,14 72,7 90,4" /><KpiCard label="Industrial candidates" value="11" delta="+2 today" tone="amber" icon={Factory} points="0,20 18,18 36,20 54,12 72,15 90,8" onClick={() => onSelect(events[0])} /><KpiCard label="Persistent sources" value="08" delta="-1.2%" tone="cyan" icon={Radio} points="0,9 18,12 36,9 54,11 72,8 90,10" /><KpiCard label="High priority" value={String(highCount).padStart(2, "0")} delta="+3 today" tone="coral" icon={ShieldAlert} points="0,20 18,17 36,20 54,14 72,9 90,5" onClick={() => onSelect(events[2])} /><KpiCard label="Under review" value={String(pendingCount).padStart(2, "0")} delta="+2 today" tone="violet" icon={ClipboardCheck} points="0,17 18,16 36,10 54,14 72,9 90,8" /><KpiCard label="Verified events" value={String(verifiedCount)} delta="+12.5%" tone="green" icon={FileCheck2} points="0,21 18,18 36,19 54,11 72,12 90,3" /></div>
     <div className="main-grid"><MapView selected={selected} onSelect={onSelect} onOpenInvestigation={onOpenInvestigation} onOpenFacility={onOpenFacility} onResetSelection={onResetSelection} /><section className="panel events-panel"><div className="panel-heading"><div><span className="eyebrow"><ShieldAlert size={12} /> ATTENTION QUEUE</span><h2>Recent high-priority events</h2></div><button className="icon-button"><MoreHorizontal size={17} /></button></div><div className="list-filter"><span>Top priority events · {filteredEvents.length} of {events.length} available</span><button><Filter size={13} /> All assessments <ChevronDown size={13} /></button></div><div className="event-list">{filteredEvents.slice(0, 5).map((event) => <EventRow event={event} key={event.id} onSelect={onSelect} />)}</div><button className="view-all" onClick={() => onSelect(events[0])}>Open event workspace <ArrowUpRight size={14} /></button></section></div>
-    <div className="lower-grid"><section className="panel timeline-panel"><div className="panel-heading"><div><span className="eyebrow"><TrendingUp size={12} /> LAST 8 HOURS</span><h2>Thermal activity timeline</h2></div><div className="chart-toggle"><button className="active">FRP / MW</button><button>Events</button></div></div><div className="large-chart"><ResponsiveContainer width="100%" height="100%"><AreaChart data={timeline} margin={{ top: 10, right: 8, left: -20, bottom: 0 }}><defs><linearGradient id="timelineFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f2a23a" stopOpacity={0.28} /><stop offset="100%" stopColor="#f2a23a" stopOpacity={0} /></linearGradient></defs><CartesianGrid stroke="#223039" strokeDasharray="2 4" vertical={false} /><XAxis dataKey="label" tick={{ fill: "#7f919b", fontSize: 10 }} axisLine={false} tickLine={false} /><YAxis tick={{ fill: "#7f919b", fontSize: 10 }} axisLine={false} tickLine={false} /><ChartTooltip contentStyle={{ background: "#121a20", border: "1px solid #2b3b45", borderRadius: 8, color: "#dfe9ec", fontSize: 11 }} /><Area type="monotone" dataKey="value" stroke="#f2a23a" strokeWidth={2} fill="url(#timelineFill)" dot={{ fill: "#f2a23a", r: 3, stroke: "#121a20", strokeWidth: 2 }} /></AreaChart></ResponsiveContainer></div><div className="chart-summary"><span><i className="legend-line amber-line" /> All thermal observations</span><span>Peak intensity <b>118 MW</b> at 21:00 UTC</span></div></section><section className="panel status-panel"><div className="panel-heading"><div><span className="eyebrow"><Database size={12} /> SYSTEM HEALTH</span><h2>Data & service status</h2></div><StatusPill tone="cyan">Good</StatusPill></div><div className="health-list"><div><span className="health-source"><span className="health-dot good" /> Thermal observations</span><strong>DEMO</strong></div><div><span className="health-source"><span className="health-dot good" /> OpenStreetMap</span><strong>DEMO DATA</strong></div><div><span className="health-source"><span className="health-dot warn" /> Weather context</span><strong>DEMO DATA</strong></div><div><span className="health-source"><span className="health-dot good" /> NASA GIBS satellite imagery</span><strong>Visual context</strong></div></div><div className="quality-footer"><div><span>DATA QUALITY</span><strong>96%</strong></div><div className="quality-bar"><span /></div><p>1,284 observations · 12 duplicates removed · 0.8% missing values</p></div></section></div>
+    <div className="lower-grid"><section className="panel timeline-panel"><div className="panel-heading"><div><span className="eyebrow"><TrendingUp size={12} /> LAST 8 HOURS</span><h2>Thermal activity timeline</h2></div><div className="chart-toggle"><button className="active">FRP / MW</button><button>Events</button></div></div><div className="large-chart"><ResponsiveContainer width="100%" height="100%"><AreaChart data={timeline} margin={{ top: 10, right: 8, left: -20, bottom: 0 }}><defs><linearGradient id="timelineFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f2a23a" stopOpacity={0.28} /><stop offset="100%" stopColor="#f2a23a" stopOpacity={0} /></linearGradient></defs><CartesianGrid stroke="#223039" strokeDasharray="2 4" vertical={false} /><XAxis dataKey="label" tick={{ fill: "#7f919b", fontSize: 10 }} axisLine={false} tickLine={false} /><YAxis tick={{ fill: "#7f919b", fontSize: 10 }} axisLine={false} tickLine={false} /><ChartTooltip contentStyle={{ background: "#121a20", border: "1px solid #2b3b45", borderRadius: 8, color: "#dfe9ec", fontSize: 11 }} /><Area type="monotone" dataKey="value" stroke="#f2a23a" strokeWidth={2} fill="url(#timelineFill)" dot={{ fill: "#f2a23a", r: 3, stroke: "#121a20", strokeWidth: 2 }} /></AreaChart></ResponsiveContainer></div><div className="chart-summary"><span><i className="legend-line amber-line" /> All thermal observations</span><span>Peak intensity <b>118 MW</b> at 21:00 UTC</span></div></section><section className="panel status-panel"><div className="panel-heading"><div><span className="eyebrow"><Database size={12} /> SYSTEM HEALTH</span><h2>Data & service status</h2></div><StatusPill tone="cyan">Good</StatusPill></div><div className="health-list"><div><span className="health-source"><span className={`health-dot ${events[0]?.dataSource === "NASA FIRMS" ? "good" : "warn"}`} /> Thermal observations</span><strong>{events[0]?.dataSource === "NASA FIRMS" ? "NASA FIRMS" : "DEMO"}</strong></div><div><span className="health-source"><span className="health-dot good" /> OpenStreetMap</span><strong>DEMO DATA</strong></div><div><span className="health-source"><span className="health-dot warn" /> Weather context</span><strong>DEMO DATA</strong></div><div><span className="health-source"><span className="health-dot good" /> NASA GIBS satellite imagery</span><strong>Visual context</strong></div></div><div className="quality-footer"><div><span>DATA QUALITY</span><strong>96%</strong></div><div className="quality-bar"><span /></div><p>1,284 observations · 12 duplicates removed · 0.8% missing values</p></div></section></div>
   </>;
 }
 
@@ -581,6 +593,8 @@ export default function Home() {
   const [verifiedCount, setVerifiedCount] = useState(() => events.filter((event) => event.verification === "Verified").length);
   const [analysisState, setAnalysisState] = useState<"idle" | "running" | "complete">("idle");
   const [lastRefreshed, setLastRefreshed] = useState(() => new Date().toISOString().slice(11, 19) + " UTC");
+  const [firmsStatus, setFirmsStatus] = useState<"demo" | "live" | "loading" | "error">(() => firmsService.getMapKey() ? "loading" : "demo");
+  const [, forceDataUpdate] = useState(0);
   const [, setRange] = useState("Today");
   const [selected, setSelected] = useState<ThermalEvent | null>(initialEvent);
   const [activeView, setActiveView] = useState(initialEvent ? "Event Investigation" : "Command Center");
@@ -592,11 +606,23 @@ export default function Home() {
   const openFacility = (_facility: Facility) => { setActiveView("Facilities"); window.history.pushState({}, "", "/facilities"); };
   const verifyEvent = (label: ThermalEvent["verification"]) => { if (label === "Verified") setVerifiedCount((count) => count + 1); };
   const runAnalysis = () => { setAnalysisState("running"); window.setTimeout(() => setAnalysisState("complete"), 1100); };
-  const refreshData = () => { setLastRefreshed(new Date().toISOString().slice(11, 19) + " UTC"); setAnalysisState("idle"); setSelected(null); };
+  const ingestFirms = async (key?: string) => {
+    if (key !== undefined) firmsService.setMapKey(key);
+    if (!firmsService.getMapKey()) { setFirmsStatus("demo"); return; }
+    setFirmsStatus("loading");
+    try {
+      const liveEvents = await firmsService.getRecentFirmsEvents();
+      if (liveEvents.length) { events.splice(0, events.length, ...liveEvents); forceDataUpdate((value) => value + 1); setFirmsStatus("live"); setLastRefreshed(new Date().toISOString().slice(11, 19) + " UTC"); setSelected(null); }
+      else setFirmsStatus("error");
+    } catch { setFirmsStatus("error"); }
+  };
+  useEffect(() => { if (firmsService.getMapKey()) void ingestFirms(); }, []);
+  useEffect(() => { if (firmsStatus !== "live") return; const timer = window.setInterval(() => void ingestFirms(), 15 * 60 * 1000); return () => window.clearInterval(timer); }, [firmsStatus]);
+  const refreshData = () => { void ingestFirms(); setAnalysisState("idle"); setSelected(null); };
   const exportData = () => { const header = ["event_id","title","location","class","status","verification","latitude","longitude","frp_mw","baseline_mw","timestamp"]; const rows = events.map((event) => [event.eventId,event.title,event.location,event.className,event.status,event.verification,event.latitude,event.longitude,event.frp,event.baseline,event.timestamp]); const csv = [header, ...rows].map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n"); const blob = new Blob([csv], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = "thermoscope-thermal-events.csv"; anchor.click(); URL.revokeObjectURL(url); };
 
-  return <div className="app-shell"><Sidebar activeView={activeView} setActiveView={setActiveView} open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} /><div className="app-main"><TopBar onMenu={() => setMobileNavOpen(true)} activeView={activeTitle} onSearch={setSearch} onOpenInvestigation={openInvestigation} onOpenFacility={openFacility} onRangeChange={setRange} /><main className="content-wrap">
-    {activeView === "Command Center" && <Dashboard onSelect={selectEvent} onOpenInvestigation={openInvestigation} onOpenFacility={openFacility} onResetSelection={resetMapView} selected={selected} search={search} onRunAnalysis={runAnalysis} onExport={exportData} onRefresh={refreshData} analysisState={analysisState} lastRefreshed={lastRefreshed} />}
+  return <div className="app-shell"><Sidebar activeView={activeView} setActiveView={setActiveView} open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} live={firmsStatus === "live"} eventCount={events.length} /><div className="app-main"><TopBar onMenu={() => setMobileNavOpen(true)} activeView={activeTitle} onSearch={setSearch} onOpenInvestigation={openInvestigation} onOpenFacility={openFacility} onRangeChange={setRange} live={firmsStatus === "live"} /><main className="content-wrap">
+    {activeView === "Command Center" && <Dashboard onSelect={selectEvent} onOpenInvestigation={openInvestigation} onOpenFacility={openFacility} onResetSelection={resetMapView} selected={selected} search={search} onRunAnalysis={runAnalysis} onExport={exportData} onRefresh={refreshData} analysisState={analysisState} lastRefreshed={lastRefreshed} firmsStatus={firmsStatus} onConnectFirms={ingestFirms} />}
     {activeView === "Thermal Events" && <EventsView onOpenInvestigation={openInvestigation} search={search} />}
     {activeView === "Facilities" && <FacilitiesView onOpenInvestigation={openInvestigation} />}
     {activeView === "Analytics" && <AnalyticsView />}
@@ -604,5 +630,5 @@ export default function Home() {
     {activeView === "Alerts" && <AlertsView onOpenInvestigation={openInvestigation} />}
     {activeView === "Event Investigation" && <InvestigationView event={selected ?? events[0]} onViewOnMap={viewOnMap} />}
     {!["Command Center", "Thermal Events", "Event Investigation", "Facilities", "Analytics", "Verification Center", "Alerts"].includes(activeView) && <PlaceholderView activeView={activeView} onSelect={selectEvent} />}
-  </main><footer className="app-footer"><span><span className="pulse-dot" /> THERMOSCOPE operational console</span><span>Demo mode · Data provenance visible in every workspace</span><span>v0.9.4-prototype</span></footer></div>{selected && activeView === "Command Center" && <InvestigationDrawer event={selected} onClose={() => setSelected(null)} onVerify={verifyEvent} onOpenInvestigation={openInvestigation} onViewOnMap={viewOnMap} />}</div>;
+  </main><footer className="app-footer"><span><span className="pulse-dot" /> THERMOSCOPE operational console</span><span>{events[0]?.dataSource === "NASA FIRMS" ? "NASA FIRMS live mode · VIIRS NOAA-21 detections" : "Demo mode · Data provenance visible in every workspace"}</span><span>v0.9.4-prototype</span></footer></div>{selected && activeView === "Command Center" && <InvestigationDrawer event={selected} onClose={() => setSelected(null)} onVerify={verifyEvent} onOpenInvestigation={openInvestigation} onViewOnMap={viewOnMap} />}</div>;
 }
